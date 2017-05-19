@@ -47,9 +47,8 @@ public:
 	{
 		size_t szProduct = 0;
 
-		szProduct += (uintptr_t)pWrapper->getSectionHeader(0) - (uintptr_t)pWrapper->get();
-
 		auto secPRawData = (*pvSections)[0]->get()->PointerToRawData;
+		szProduct += secPRawData;
 		std::unordered_map<std::string, std::unordered_set<std::string>*> imps;
 		for (auto pSec : *pvSections)
 		{
@@ -57,15 +56,15 @@ public:
 			// calculate actural size
 			if (pWrapper->optionalHeader().DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress - pSec->original().VirtualAddress > pSec->original().SizeOfRawData)
 			{
-				pSec->extend(0x1000);
+				//pSec->extend(0x1000);
 			}
 			if (pWrapper->optionalHeader().DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress - pSec->original().VirtualAddress > pSec->original().SizeOfRawData)
 			{
-				pSec->extend(0x1000);
+				//pSec->extend(0x1000);
 			}
 			if (pWrapper->optionalHeader().DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].VirtualAddress - pSec->original().VirtualAddress > pSec->original().SizeOfRawData)
 			{
-				pSec->extend(0x1000);
+				//pSec->extend(0x1000);
 			}
 
 			pSec->align();
@@ -88,7 +87,7 @@ public:
 		// Another exception is that attribute certificate and debug information must be placed at the very end of an image file, with the attribute certificate table immediately preceding the debug section, because the loader does not map these into memory. 
 		// drop them for now
 		uint8_t* product = new uint8_t[szProduct];
-		int offset = (uintptr_t)pWrapper->getSectionHeader(0) - (uintptr_t)pWrapper->get();
+		int offset = (*pvSections)[0]->get()->PointerToRawData;
 		memcpy(product, (void*)pWrapper->get(), offset);
 		const Wrapper wProduct(product, szProduct);
 
@@ -119,8 +118,10 @@ public:
 
 
 		// apply section data
+		offset = (*pvSections)[0]->get()->PointerToRawData;
 		for (auto pSec : *pvSections)
 		{
+			if (offset + pSec->size() > szProduct) throw;
 			memcpy(product + offset, pSec->ptr(), pSec->size());
 			offset += pSec->size();
 		}

@@ -4,10 +4,10 @@
 
 #include <cinttypes>
 #include <vector>
-struct relocBlk
+struct relocblk
 {
-	uint16_t type : 4;
 	uint16_t offset : 12;
+	uint16_t type : 4;
 };
 
 #endif

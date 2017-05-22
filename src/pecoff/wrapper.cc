@@ -62,14 +62,14 @@ std::pair<unsigned int, unsigned int> Wrapper::getRVAoffsetFromSectionBase(uintp
 	throw std::out_of_range("invalid rva, unable to find a section containing the specified rva");
 }
 
-std::vector<std::pair<std::string, std::vector<std::pair<std::string, uintptr_t>>*>>& Wrapper::getImports()
+std::vector<std::pair<std::string, std::vector<std::pair<std::pair<uint16_t, std::string>, uintptr_t>>*>>& Wrapper::getImports()
 {
 	if (pvImports == nullptr)
 		pvImports = &((const Wrapper*)this)->getImports();
 	return *pvImports;
 }
 
-std::vector<std::pair<std::string, std::vector<std::pair<std::string, uintptr_t>>*>> Wrapper::getImports() const
+std::vector<std::pair<std::string, std::vector<std::pair<std::pair<uint16_t, std::string>, uintptr_t>>*>> Wrapper::getImports() const
 {
 	IMAGE_IMPORT_DESCRIPTOR* pDirImport;
 
@@ -78,7 +78,7 @@ std::vector<std::pair<std::string, std::vector<std::pair<std::string, uintptr_t>
 	else
 		throw std::runtime_error("required field: import dir");
 
-	std::vector<std::pair<std::string, std::vector<std::pair<std::string, uintptr_t>>*>> vImports;
+	std::vector<std::pair<std::string, std::vector<std::pair<std::pair<uint16_t, std::string>, uintptr_t>>*>> vImports;
 	int i = 0;
 	while ((pDirImport + i)->OriginalFirstThunk != 0)
 	{
@@ -88,7 +88,7 @@ std::vector<std::pair<std::string, std::vector<std::pair<std::string, uintptr_t>
 		std::string dllName;
 		while (*pDllName != 0) dllName += *(pDllName++);
 
-		auto pvFunctions = new std::vector<std::pair<std::string, uintptr_t>>;
+		auto pvFunctions = new std::vector<std::pair<std::pair<uint16_t, std::string>, uintptr_t>>;
 
 		try
 		{
@@ -101,12 +101,12 @@ std::vector<std::pair<std::string, std::vector<std::pair<std::string, uintptr_t>
 #ifdef _M_X64
 				if (*(ppThunk + j) & IMAGE_ORDINAL_FLAG64)
 				{
-					pvFunctions->push_back(std::make_pair(std::to_string(IMAGE_ORDINAL64(*(ppThunk + j))), pFunc));
+					pvFunctions->push_back(std::make_pair(std::make_pair((IMAGE_ORDINAL64(*(ppThunk + j))), ""), pFunc));
 				}
 #else
 				if (*(ppThunk + j) & IMAGE_ORDINAL_FLAG32)
 				{
-					pvFunctions->push_back(std::make_pair(std::to_string(IMAGE_ORDINAL32(*(ppThunk + j))), pFunc));
+					pvFunctions->push_back(std::make_pair(std::make_pair((IMAGE_ORDINAL32(*(ppThunk + j))), ""), pFunc));
 				}
 #endif
 				else
@@ -117,7 +117,12 @@ std::vector<std::pair<std::string, std::vector<std::pair<std::string, uintptr_t>
 
 					std::string s;
 					while (*pName != 0) s += *(pName++);
-					pvFunctions->push_back(std::make_pair(s, pFunc));	/* pointer to address */
+#ifdef _M_X64
+					pvFunctions->push_back(std::make_pair(std::make_pair((IMAGE_ORDINAL64(*(ppThunk + j))), s), pFunc));	/* pointer to address */
+#else
+					pvFunctions->push_back(std::make_pair(std::make_pair((IMAGE_ORDINAL32(*(ppThunk + j))), s), pFunc));	/* pointer to address */
+#endif
+					
 				}
 
 				j++;
@@ -170,14 +175,14 @@ std::vector<std::pair<std::string, uintptr_t>> Wrapper::getExports() const
 	return vExports;
 }
 
-std::vector<std::pair<uint32_t, relocBlk>>& Wrapper::getRelocations()
+std::vector<std::pair<uint32_t, relocblk>>& Wrapper::getRelocations()
 {
 	if (pvRelocations == nullptr)
 		pvRelocations = &((const Wrapper*)this)->getRelocations();
 	return *pvRelocations;
 }
 
-std::vector<std::pair<uint32_t, relocBlk>> Wrapper::getRelocations() const
+std::vector<std::pair<uint32_t, relocblk>> Wrapper::getRelocations() const
 {
 	IMAGE_BASE_RELOCATION* pReloc;
 
@@ -186,7 +191,7 @@ std::vector<std::pair<uint32_t, relocBlk>> Wrapper::getRelocations() const
 	else
 		throw std::runtime_error("required field: base relocation");
 
-	std::vector<std::pair<uint32_t, relocBlk>> vRelocations;
+	std::vector<std::pair<uint32_t, relocblk>> vRelocations;
 
 	while (pReloc->VirtualAddress != 0)
 	{
@@ -194,8 +199,8 @@ std::vector<std::pair<uint32_t, relocBlk>> Wrapper::getRelocations() const
 		for (auto i = 0; i < (pReloc->SizeOfBlock - 8) / 2; i++)
 		{
 			uint16_t* ptypeoffset = ((uint16_t*)((uintptr_t)pReloc + 8)) + i;
-			assert(sizeof(relocBlk) == sizeof(uint16_t));
-			vRelocations.push_back(std::make_pair(pgRVA, *(relocBlk*)ptypeoffset));
+			assert(sizeof(relocblk) == sizeof(uint16_t));
+			vRelocations.push_back(std::make_pair(pgRVA, *(relocblk*)ptypeoffset));
 		}
 
 		pReloc = (IMAGE_BASE_RELOCATION*)((uintptr_t)pReloc + pReloc->SizeOfBlock);
@@ -204,13 +209,13 @@ std::vector<std::pair<uint32_t, relocBlk>> Wrapper::getRelocations() const
 	return vRelocations;
 }
 
-std::vector<std::pair<uint32_t, relocBlk>> Wrapper::getRelocations(IMAGE_SECTION_HEADER* pSection) const
+std::vector<std::pair<uint32_t, relocblk>> Wrapper::getRelocations(IMAGE_SECTION_HEADER* pSection) const
 {
-	std::vector<std::pair<uint32_t, relocBlk>> relocs;
+	std::vector<std::pair<uint32_t, relocblk>> relocs;
 	for (auto pii : getRelocations())
 	{
 		uint32_t pgRVA = pii.first;
-		relocBlk blk = pii.second;
+		relocblk blk = pii.second;
 		if ((pgRVA + blk.offset >= pSection->VirtualAddress) && (pgRVA + blk.offset < pSection->VirtualAddress + pSection->SizeOfRawData))
 			relocs.push_back(pii);
 	}

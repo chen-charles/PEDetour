@@ -32,14 +32,15 @@ public:
 
 public:	/* non-caching version */
 	std::vector<std::pair<std::string, uintptr_t>> getExports() const;	/* funcName, RVA */
-	std::vector<std::pair<std::string, std::vector<std::pair<std::string, uintptr_t>>*>> getImports() const;	/* dllname, {name, PointerToFunction(RVA+Base)} / {std::to_string(ordinal), PointerToFunction(RVA+Base)} */ /* call dword [PointerToFunction] */
-	std::vector<std::pair<uint32_t, relocBlk>> getRelocations() const;
-	std::vector<std::pair<uint32_t, relocBlk>> getRelocations(IMAGE_SECTION_HEADER* pSection) const;	/* get relocations within the given section */
+	std::vector<std::pair<std::string, std::vector<std::pair<std::pair<uint16_t, std::string>, uintptr_t>>*>> getImports() const;	/* dllname, {{0, name}, PointerToFunction(RVA+Base)} / {{ordinal, std::string("")}, PointerToFunction(RVA+Base)} */ /* call dword [PointerToFunction] */
+	std::vector<std::pair<uint32_t, relocblk>> getRelocations() const;
+	std::vector<std::pair<uint32_t, relocblk>> getRelocations(IMAGE_SECTION_HEADER* pSection) const;	/* get relocations within the given section */
+	IMAGE_DATA_DIRECTORY DataDirectory(uint8_t DirectoryEntry) const { return pOpHeader->DataDirectory[DirectoryEntry&0xf]; }
 
 public:	/* caching */
 	std::vector<std::pair<std::string, uintptr_t>>& getExports();
-	std::vector<std::pair<std::string, std::vector<std::pair<std::string, uintptr_t>>*>>& getImports();	/* dllname, {name, PointerToFunction(RVA+Base)} / {std::to_string(ordinal), PointerToFunction(RVA+Base)} */ /* call dword [PointerToFunction] */
-	std::vector<std::pair<uint32_t, relocBlk>>& getRelocations();
+	std::vector<std::pair<std::string, std::vector<std::pair<std::pair<uint16_t, std::string>, uintptr_t>>*>>& getImports();
+	std::vector<std::pair<uint32_t, relocblk>>& getRelocations();
 	void flush_cache();
 
 public:	/* utility */
@@ -55,8 +56,8 @@ public:	/* utility */
 
 private:	/* cached, release on ~Wrapper */
 	std::vector<std::pair<std::string, uintptr_t>>* pvExports = nullptr;
-	std::vector<std::pair<std::string, std::vector<std::pair<std::string, uintptr_t>>*>>* pvImports = nullptr;
-	std::vector<std::pair<uint32_t, relocBlk>>* pvRelocations = nullptr;
+	std::vector<std::pair<std::string, std::vector<std::pair<std::pair<uint16_t, std::string>, uintptr_t>>*>>* pvImports = nullptr;
+	std::vector<std::pair<uint32_t, relocblk>>* pvRelocations = nullptr;
 
 protected:	/* initialized at construction time */
 	const void* p = nullptr;

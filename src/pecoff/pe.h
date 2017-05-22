@@ -2,18 +2,14 @@
 #ifndef _PECOFF_PE_H_
 #define _PECOFF_PE_H_
 
-#include <unordered_map>
-#include <unordered_set>
+
 #include "CapstoneDisassembler.h"
 #include "KeystoneAssembler.h"
+#include "memblk.h"
 #include "wrapper.h"
 #include "section.h"
+#include "impDir.h"
 
-struct memblock
-{
-	void* ptr;
-	size_t size;
-};
 
 class PE
 {
@@ -43,51 +39,61 @@ public:
 	const Wrapper& wrapper() const { (const Wrapper*)pWrapper; }
 
 public:
-	memblock produce()
+	memblk produce()
 	{
 		size_t szProduct = 0;
 
-		auto secPRawData = (*pvSections)[0]->get()->PointerToRawData;
+		auto secPRawData = (*pvSections)[0]->header.PointerToRawData;
 		szProduct += secPRawData;
-		std::unordered_map<std::string, std::unordered_set<std::string>*> imps;
+
+		importDirectory impDir;
+		for (auto pSec : *pvSections)
+		{
+			impDir.add(*pSec);
+		}
+		auto iatDirVAddr = impDir.produce();
+		int impDirVAddr = 0;
+
+		uintptr_t secvaddr = (*pvSections)[0]->header.VirtualAddress;
 		for (auto pSec : *pvSections)
 		{
 			// put imp/exp/reloc table in their original containing section
 			// calculate actural size
-			if (pWrapper->optionalHeader().DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress - pSec->original().VirtualAddress > pSec->original().SizeOfRawData)
+			if (pWrapper->DataDirectory(IMAGE_DIRECTORY_ENTRY_EXPORT).VirtualAddress >=pSec->original().VirtualAddress &&
+				pWrapper->DataDirectory(IMAGE_DIRECTORY_ENTRY_EXPORT).VirtualAddress < pSec->original().VirtualAddress + pSec->original().Misc.VirtualSize)
 			{
 				//pSec->extend(0x1000);
 			}
-			if (pWrapper->optionalHeader().DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress - pSec->original().VirtualAddress > pSec->original().SizeOfRawData)
+			if (pWrapper->DataDirectory(IMAGE_DIRECTORY_ENTRY_IMPORT).VirtualAddress >= pSec->original().VirtualAddress &&
+				pWrapper->DataDirectory(IMAGE_DIRECTORY_ENTRY_IMPORT).VirtualAddress < pSec->original().VirtualAddress + pSec->original().Misc.VirtualSize)
 			{
-				//pSec->extend(0x1000);
+				impDirVAddr = pSec->header.VirtualAddress + pSec->size();
+				iatDirVAddr += impDirVAddr;
+				pSec->append(impDir);
 			}
-			if (pWrapper->optionalHeader().DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].VirtualAddress - pSec->original().VirtualAddress > pSec->original().SizeOfRawData)
+			if (pWrapper->DataDirectory(IMAGE_DIRECTORY_ENTRY_BASERELOC).VirtualAddress >= pSec->original().VirtualAddress &&
+				pWrapper->DataDirectory(IMAGE_DIRECTORY_ENTRY_BASERELOC).VirtualAddress < pSec->original().VirtualAddress + pSec->original().Misc.VirtualSize)
 			{
 				//pSec->extend(0x1000);
 			}
 
 			pSec->align();
+			
 
-			pSec->get()->PointerToRawData = secPRawData;
+			pSec->header.PointerToRawData = secPRawData;
 			secPRawData += pSec->size();
+
+			pSec->header.VirtualAddress = secvaddr;
+			secvaddr += pSec->vsize();
 
 			szProduct += pSec->size();
 			szProduct += sizeof(IMAGE_SECTION_HEADER);
-
-			// collect imports
-			for (auto i : pSec->imps)
-			{
-				if (imps.find(i.first.first) == imps.end())
-					imps.insert({i.first.first, new std::unordered_set<std::string>});
-				imps[i.first.first]->insert(i.first.second);
-			}
 		}
-		
+
 		// Another exception is that attribute certificate and debug information must be placed at the very end of an image file, with the attribute certificate table immediately preceding the debug section, because the loader does not map these into memory. 
 		// drop them for now
 		uint8_t* product = new uint8_t[szProduct];
-		int offset = (*pvSections)[0]->get()->PointerToRawData;
+		int offset = (*pvSections)[0]->header.PointerToRawData;
 		memcpy(product, (void*)pWrapper->get(), offset);
 		const Wrapper wProduct(product, szProduct);
 
@@ -96,15 +102,31 @@ public:
 		auto pHeader = (IMAGE_FILE_HEADER*)((uintptr_t)product + pDosHeader->e_lfanew + sizeof(uint32_t));
 		pHeader->NumberOfSections = (WORD)pvSections->size();
 		auto pOpHeader = (IMAGE_OPTIONAL_HEADER*)((uintptr_t)pHeader + sizeof(IMAGE_FILE_HEADER));
+		for (auto pSec : *pvSections)
+		{
+			if (pWrapper->DataDirectory(IMAGE_DIRECTORY_ENTRY_IMPORT).VirtualAddress >= pSec->original().VirtualAddress &&
+				pWrapper->DataDirectory(IMAGE_DIRECTORY_ENTRY_IMPORT).VirtualAddress < pSec->original().VirtualAddress + pSec->original().Misc.VirtualSize)
+			{
+				pOpHeader->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress = impDirVAddr;
+				pOpHeader->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size = impDir.size();
+			}
+			if (pWrapper->DataDirectory(IMAGE_DIRECTORY_ENTRY_IAT).VirtualAddress >= pSec->original().VirtualAddress &&
+				pWrapper->DataDirectory(IMAGE_DIRECTORY_ENTRY_IAT).VirtualAddress < pSec->original().VirtualAddress + pSec->original().Misc.VirtualSize)
+			{
+				pOpHeader->DataDirectory[IMAGE_DIRECTORY_ENTRY_IAT].VirtualAddress = iatDirVAddr;
+				pOpHeader->DataDirectory[IMAGE_DIRECTORY_ENTRY_IAT].Size = impDir.szIAT;
+			}
+		}
 
+		auto pSectionHeader = (IMAGE_SECTION_HEADER*)((uintptr_t)pOpHeader + sizeof(IMAGE_OPTIONAL_HEADER));
+		offset = (uintptr_t)pSectionHeader - (uintptr_t)product;
 		// fill in section headers
 		for (auto pSec : *pvSections)
 		{
-			*(IMAGE_SECTION_HEADER*)(product + offset) = *pSec->get();
+			*(IMAGE_SECTION_HEADER*)(product + offset) = pSec->header;
+			pSec->apply(pSec->header.VirtualAddress, pSec->header.PointerToRawData);
 			offset += sizeof(IMAGE_SECTION_HEADER);
 		}
-
-		// generate import 
 
 		// fix calls to imports 
 
@@ -118,16 +140,16 @@ public:
 
 
 		// apply section data
-		offset = (*pvSections)[0]->get()->PointerToRawData;
+		offset = (*pvSections)[0]->header.PointerToRawData;
 		for (auto pSec : *pvSections)
 		{
 			if (offset + pSec->size() > szProduct) throw;
-			memcpy(product + offset, pSec->ptr(), pSec->size());
+			memcpy(product + offset, pSec->get(), pSec->size());
 			offset += pSec->size();
 		}
 
 		// return
-		memblock result;
+		memblk result;
 		result.ptr = product;
 		result.size = szProduct;
 		return result;

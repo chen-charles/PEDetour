@@ -8,7 +8,10 @@
 extern "C" {
 #endif
 
+#if !defined(_MSC_VER) || !defined(_KERNEL_MODE)
 #include <stdint.h>
+#endif
+
 #include "platform.h"
 
 #ifdef _MSC_VER
@@ -129,7 +132,7 @@ typedef enum arm_op_type {
 	ARM_OP_CIMM = 64, // C-Immediate (coprocessor registers)
 	ARM_OP_PIMM, // P-Immediate (coprocessor registers)
 	ARM_OP_SETEND,	// operand for SETEND instruction
-	ARM_OP_SYSREG,	// MSR/MSR special register operand
+	ARM_OP_SYSREG,	// MSR/MRS special register operand
 } arm_op_type;
 
 //> Operand type for SETEND instruction

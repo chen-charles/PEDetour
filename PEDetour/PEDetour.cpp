@@ -118,7 +118,6 @@ int main(int argc, char* argv[])
 		{
 			for (int i = 5; i < argc; i++)
 				vAddImports.push_back(argv[i]);
-			
 		}
 	}
 
@@ -129,7 +128,7 @@ int main(int argc, char* argv[])
 	functionName = "?fnTestDLL@@YAHXZ";
 	
 #ifndef _M_X64
-	injectionfname = "inject.asm";
+	injectionfname = "inject.x86.asm";
 #else
 	injectionfname = "inject.x86_64.asm";
 #endif

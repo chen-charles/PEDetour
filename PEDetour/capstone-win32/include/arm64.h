@@ -8,7 +8,10 @@
 extern "C" {
 #endif
 
+#if !defined(_MSC_VER) || !defined(_KERNEL_MODE)
 #include <stdint.h>
+#endif
+
 #include "platform.h"
 
 #ifdef _MSC_VER
@@ -62,7 +65,7 @@ typedef enum arm64_cc {
 } arm64_cc;
 
 //> System registers
-typedef enum arm64_mrs_reg {
+typedef enum arm64_sysreg {
 	//> System registers for MRS
 	ARM64_SYSREG_INVALID           = 0,
 	ARM64_SYSREG_MDCCSR_EL0        = 0x9808, // 10  011  0000  0001  000
@@ -656,8 +659,8 @@ typedef enum arm64_reg {
 
 	//> alias registers
 
-	ARM64_REG_IP1 = ARM64_REG_X16,
-	ARM64_REG_IP0 = ARM64_REG_X17,
+	ARM64_REG_IP0 = ARM64_REG_X16,
+	ARM64_REG_IP1 = ARM64_REG_X17,
 	ARM64_REG_FP = ARM64_REG_X29,
 	ARM64_REG_LR = ARM64_REG_X30,
 } arm64_reg;

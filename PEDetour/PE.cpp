@@ -440,7 +440,7 @@ bool PE::addImport(std::string dll, std::string functionName)
 
 		pDesc++;
 	}
-	
+
 	pDesc++;	// terminating null desc
 
 	void* pEntryData = (void*)pILT;	// hint name table with dll name entries
@@ -480,7 +480,8 @@ bool PE::addImport(std::string dll, std::string functionName)
 
 			j++;
 		}
-
+		*(uintptr_t*)(pEntryData) = 0;
+		advanceVoidPtr(pEntryData, sizeof(uintptr_t));
 		pDesc++;
 	}
 
@@ -497,6 +498,8 @@ bool PE::addImport(std::string dll, std::string functionName)
 			advanceVoidPtr(pEntryData, sizeof(uintptr_t));
 			j++;
 		}
+		*(uintptr_t*)(pEntryData) = 0;
+		advanceVoidPtr(pEntryData, sizeof(uintptr_t));
 		//for (int k = 0; k < 15; k++)
 		//{
 		//	*(uintptr_t*)(pEntryData) = *(ppThunk + j);

@@ -67,8 +67,6 @@ public:
 	{
 		Relocatable::insert(other, offset);
 		size_t szExt = other.size();
-		header.SizeOfRawData += szExt;
-		header.Misc.VirtualSize += szExt;
 
 		// apply relocation fixes
 		for (auto i = 0; i < b_relocs.size(); i++)
@@ -115,6 +113,15 @@ public:
 protected:
 	IMAGE_SECTION_HEADER* pSec = nullptr;	// original header
 	const Wrapper* pWrapper = nullptr;
+
+	virtual void resize(size_t newSize)
+	{
+		Relocatable::resize(newSize);
+
+		// when resizing a section, we need to update the tables
+		header.SizeOfRawData = newSize;
+		header.Misc.VirtualSize = newSize;
+	}
 };
 
 

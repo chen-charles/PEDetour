@@ -4,6 +4,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 file (STRINGS "capstone.version" vCapstone)
 file (STRINGS "keystone.version" vKeystone)
 
+set (CMAKE_C_STANDARD 11)
+set (CMAKE_CXX_STANDARD 11)
+
 add_subdirectory(capstone)
 add_subdirectory(keystone)
 

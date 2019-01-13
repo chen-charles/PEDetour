@@ -1,6 +1,6 @@
-#include <SDKDDKVer.h>
+
 #include <stdio.h>
-#include <tchar.h>
+// #include <tchar.h>
 
 #include <cinttypes>
 #include <iostream>
@@ -29,15 +29,12 @@ int main()
 
 		PE pe((void*)raw, length);
 
-
 		auto mblk = pe.produce();
-		std::ofstream ofs("TestDLL.out", std::ofstream::out | std::ofstream::binary);
+		std::ofstream ofs("TestDLL.dll", std::ofstream::out | std::ofstream::binary);
 		if (ofs) ofs.write((char*)mblk.ptr, mblk.size);
 		else throw std::exception("unable to open the output file");
 		ofs.close();
 		delete mblk.ptr;
-
-
 		delete raw;
 	}
 	else

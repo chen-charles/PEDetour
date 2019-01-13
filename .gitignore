@@ -1,3 +1,5 @@
 /.vs
 /capstone
 /keystone
+/package-x86
+/package-x86_64

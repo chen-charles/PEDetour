@@ -1,10 +1,12 @@
 #!/bin/bash
+rm -rf capstone
 version=`cat ./capstone.version`
 echo $version
 wget -N "https://github.com/aquynh/capstone/archive/"$version".tar.gz" && tar -xvzf $version".tar.gz" -C ./
 mv capstone-$version capstone
 rm -f $version.tar.gz
 
+rm -rf keystone
 version=`cat ./keystone.version`
 echo $version
 wget -N "https://github.com/keystone-engine/keystone/archive/"$version".tar.gz" && tar -xvzf $version".tar.gz" -C ./

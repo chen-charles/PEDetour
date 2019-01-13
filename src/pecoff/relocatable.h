@@ -9,6 +9,27 @@
 #include <Windows.h>
 #include <unordered_set>
 
+
+/*
+A 'code' chunk is usually relocatable, as most instructions are not location dependent. 
+This comes with a few exceptional cases, and we have to handle them individually,
+1. relative jump / branch jump (jg,je,...)
+	A code segment might depend on a relative jump within 16 bit limit,
+	by moving around such segments, those relative jumps might have to be expanded to long jumps.
+	Branch jumps require a 'bootstrap' step to relay.
+2. memory operations
+	If we move a data/bss,... segment, all code segments accessing it must be fixed. 
+	This is more complicated then it sounds, since the existence of flags.
+
+	The naive solution, is to never move a memory RW section.
+
+Each of those operations must fix preceding code segments since the relative order has changed.
+
+
+class Relocatable
+	* code snippet, segment, data, ...
+	* relocatable has dependencies, that is, each relocatable watches for a few other relocatables, and apply changes accordingly
+*/
 class Relocatable
 {
 public:
@@ -22,22 +43,25 @@ public:
 		this->szData = szData;
 		rva_desired = desiredRelativeVirtualAddress;
 		fo_desired = desiredFileOffset;
+
+		// TODO: analyze jumps, must be fixed when insertion occurs
+		
 	}
 	~Relocatable() { delete p; }
 
 public:
 	Relocatable(const Relocatable&) = delete;
 	Relocatable& operator=(const Relocatable&) = delete;
+	virtual enum class reloc_type { RVA, RVA32, FO, FO32 };
 
 public:
 	void* get() { return p; }
 	size_t size() const { return szData; }
 	uintptr_t rva() const { return rva_desired; }
 	uintptr_t fo() const { return fo_desired; }
+	std::vector<std::pair<reloc_type, uintptr_t>> relocations() const { return relocs; }
 
 public:
-	virtual enum class reloc_type { RVA, RVA32, FO, FO32 };
-
 	void add_reloc(reloc_type type, uintptr_t relativeOffset) { relocs.push_back(std::make_pair(type, relativeOffset)); }
 	void add_reloc(reloc_type type, void* pData) { add_reloc(type, (uintptr_t)pData - (uintptr_t)get()); }
 	void add_reloc_rva(void* pData) { add_reloc(reloc_type::RVA, pData); }
@@ -101,21 +125,30 @@ public:
 		rva_desired += rva_shift;
 		fo_desired += fo_shift;
 	}
-	
+
 	void append(Relocatable& other) { insert(other, size()); }
-	virtual void insert(Relocatable& other, int64_t offset)
+	virtual void insert(Relocatable& other, int64_t offset)	// at offset
 	{
 		size_t szExt = other.size();
 		resize(size() + szExt);
+
+		// move the second half
 		memmove((void*)((uintptr_t)get() + offset + szExt), (void*)((uintptr_t)get() + offset), size() - szExt - offset);
+
 		auto drva = other.rva(), dfo = other.fo();
 		other.applyTo(rva() + offset, fo() + offset);
 		other.shiftTo(rva() + offset, fo() + offset);
+
+		// move the first half
 		memcpy((void*)((uintptr_t)get() + offset), other.get(), other.size());
+
+
 		for (auto &i : relocs)
 			if (i.second > offset) i.second += szExt;
 		for (auto &i : other.relocs)
 			relocs.push_back(i);
+
+
 		/* 'other' is restored */
 		other.shiftTo(drva, dfo);
 		other.applyTo(drva, dfo);

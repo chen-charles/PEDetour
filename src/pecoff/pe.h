@@ -17,7 +17,9 @@ public:
 	PE() = delete;
 	PE(const void *pRaw, size_t length)
 	{
+		/* wrapper is solely designed for alias purposes, so we don't have to access pRaw */
 		pWrapper = new Wrapper(pRaw, length);
+
 		pvSections = new std::vector<Section*>;
 		for (auto i = 0; i < pWrapper->nSections(); i++)
 			pvSections->push_back(new Section(*pWrapper, pWrapper->getSectionHeader(i)));
@@ -46,6 +48,7 @@ public:
 		auto secPRawData = (*pvSections)[0]->header.PointerToRawData;
 		szProduct += secPRawData;
 
+		/* collect all section imports */
 		importDirectory impDir;
 		for (auto pSec : *pvSections)
 		{
@@ -124,11 +127,31 @@ public:
 		for (auto pSec : *pvSections)
 		{
 			*(IMAGE_SECTION_HEADER*)(product + offset) = pSec->header;
-			pSec->apply(pSec->header.VirtualAddress, pSec->header.PointerToRawData);
+
+			// apply actual relocations; SECTION SIZE IS NOW FINALIZED. 
+			pSec->applyTo(pSec->header.VirtualAddress, pSec->header.PointerToRawData);
 			offset += sizeof(IMAGE_SECTION_HEADER);
 		}
 
 		// fix calls to imports 
+		// since IAT is rebuilt and relocated, all calls to functions must be fixed
+		// analyze which linkage it previous has, match by function name ( ordinal ). (since order is rebuilt)
+
+		//int64_t iat_offset = iatDirVAddr - pWrapper->optionalHeader().DataDirectory[IMAGE_DIRECTORY_ENTRY_IAT].VirtualAddress;
+		//for (auto pSec : *pvSections)
+		//{
+		//	// loop through all relocs, modify their pointer to the newly built iat
+		//	for (auto &&i : pSec->relocations())
+		//	{
+		//		
+		//		if (i.second >= pWrapper->optionalHeader().DataDirectory[IMAGE_DIRECTORY_ENTRY_IAT].VirtualAddress &&
+		//			i.second < pWrapper->optionalHeader().DataDirectory[IMAGE_DIRECTORY_ENTRY_IAT].VirtualAddress +
+		//			pWrapper->optionalHeader().DataDirectory[IMAGE_DIRECTORY_ENTRY_IAT].Size)
+		//		{
+		//			i.second += iat_offset;
+		//		}
+		//	}
+		//}
 
 		// generate export with containing section's final header info 
 		
@@ -137,6 +160,7 @@ public:
 
 		
 		// fix rsrc (simple rva patches)
+
 
 
 		// apply section data
